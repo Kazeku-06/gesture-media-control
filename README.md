@@ -331,7 +331,7 @@ Kontribusi sangat diterima! Untuk berkontribusi:
 5. Buat Pull Request
 
 ### 📧 Kontak
-**Dibuat oleh Asta** - [GitHub Profile](https://github.com/Kazeku-06)
+**Dibuat oleh nopalll** - [GitHub Profile](https://github.com/Kazeku-06)
 
 
 ---
