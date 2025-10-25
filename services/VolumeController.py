@@ -201,3 +201,78 @@ class VolumeController:
         Mendapatkan volume saat ini
         """
         return self.current_volume
+
+    def toggle_mute(self):
+        """
+        Toggle mute state
+        """
+        if not self.volume_available:
+            print("[SIMULATION] Mute toggled")
+            return True
+
+        try:
+            if self.system == "Windows":
+                return self._toggle_mute_windows()
+            elif self.system == "Darwin":
+                return self._toggle_mute_macos()
+            elif self.system == "Linux":
+                return self._toggle_mute_linux()
+            else:
+                return False
+        except Exception as e:
+            print(f"Error toggling mute: {e}")
+            return False
+
+    def _toggle_mute_windows(self):
+        """Toggle mute for Windows"""
+        if self.volume_interface:
+            try:
+                current_mute = self.volume_interface.GetMute()
+                self.volume_interface.SetMute(not current_mute, None)
+                print(f"Windows mute toggled: {'ON' if not current_mute else 'OFF'}")
+                return True
+            except Exception as e:
+                print(f"Error toggling Windows mute: {e}")
+        return False
+
+    def _toggle_mute_macos(self):
+        """Toggle mute for macOS"""
+        try:
+            # Get current mute state
+            get_cmd = "osascript -e 'output muted of (get volume settings)'"
+            result = subprocess.run(get_cmd, shell=True, capture_output=True, text=True)
+            if result.returncode == 0:
+                current_mute = 'true' in result.stdout.lower()
+                new_mute = 'false' if current_mute else 'true'
+                set_cmd = f"osascript -e 'set volume output muted {new_mute}'"
+                subprocess.run(set_cmd, shell=True, capture_output=True)
+                print(f"macOS mute toggled: {'ON' if new_mute == 'true' else 'OFF'}")
+                return True
+        except Exception as e:
+            print(f"Error toggling macOS mute: {e}")
+        return False
+
+    def _toggle_mute_linux(self):
+        """Toggle mute for Linux"""
+        try:
+            if hasattr(self, 'linux_mixer'):
+                if self.linux_mixer == 'amixer':
+                    # Toggle mute with amixer
+                    cmd = "amixer set Master toggle > /dev/null 2>&1"
+                elif self.linux_mixer == 'pactl':
+                    # For pactl, we need to get current state and toggle
+                    get_cmd = "pactl get-sink-mute @DEFAULT_SINK@"
+                    result = subprocess.run(get_cmd, shell=True, capture_output=True, text=True)
+                    if result.returncode == 0:
+                        current_mute = 'yes' in result.stdout.lower()
+                        new_mute = 'no' if current_mute else 'yes'
+                        cmd = f"pactl set-sink-mute @DEFAULT_SINK@ {new_mute}"
+                    else:
+                        return False
+
+                subprocess.run(cmd, shell=True, capture_output=True)
+                print(f"Linux mute toggled")
+                return True
+        except Exception as e:
+            print(f"Error toggling Linux mute: {e}")
+        return False

@@ -1,5 +1,13 @@
+# Core dependencies
 opencv-python>=4.5.0
-mediapipe>=0.8.9
-numpy>=1.19.0
-comtypes>=1.1.7
-pycaw>=20181226
+mediapipe>=0.8.0
+numpy>=1.21.0
+
+# Windows-specific dependencies
+pycaw>=0.0.7; sys_platform == "win32"
+
+# Development dependencies (optional)
+# pytest>=6.0.0
+# black>=21.0.0
+# flake8>=3.9.0
+# mypy>=0.800

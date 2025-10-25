@@ -67,42 +67,29 @@ class HandDetector:
     
     def find_hands(self, img, draw=True):
         """
-        Mendeteksi tangan dalam frame - dioptimalkan
+        Mendeteksi tangan dalam frame - dioptimalkan untuk skeleton tracking
         """
         if not self.available:
             return img
-            
-        # Skip frame untuk meningkatkan FPS (process setiap 2 frame)
-        self._frame_count += 1
-        process_this_frame = self._frame_count % 2 == 0
-        
-        if process_this_frame:
-            # Resize image untuk performa yang lebih baik
-            small_img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
-            img_rgb = cv2.cvtColor(small_img, cv2.COLOR_BGR2RGB)
-            img_rgb.flags.writeable = False  # Optimasi memory
-            
-            self.results = self.hands.process(img_rgb)
-            
-            if self.results.multi_hand_landmarks and draw:
-                for hand_landmarks in self.results.multi_hand_landmarks:
-                    # Scale landmarks kembali ke ukuran asli
-                    self._scale_landmarks(hand_landmarks, 2.0)
-                    self.mp_draw.draw_landmarks(
-                        img, hand_landmarks, self.mp_hands.HAND_CONNECTIONS,
-                        self.landmark_drawing_spec,
-                        self.connection_drawing_spec
-                    )
-        else:
-            # Gunakan hasil dari frame sebelumnya
-            if self._last_hands and draw:
-                for hand_landmarks in self._last_hands:
-                    self.mp_draw.draw_landmarks(
-                        img, hand_landmarks, self.mp_hands.HAND_CONNECTIONS,
-                        self.landmark_drawing_spec,
-                        self.connection_drawing_spec
-                    )
-        
+
+        # Process every frame for better skeleton tracking
+        # Resize image untuk performa yang lebih baik
+        small_img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
+        img_rgb = cv2.cvtColor(small_img, cv2.COLOR_BGR2RGB)
+        img_rgb.flags.writeable = False  # Optimasi memory
+
+        self.results = self.hands.process(img_rgb)
+
+        if self.results.multi_hand_landmarks and draw:
+            for hand_landmarks in self.results.multi_hand_landmarks:
+                # Scale landmarks kembali ke ukuran asli
+                self._scale_landmarks(hand_landmarks, 2.0)
+                self.mp_draw.draw_landmarks(
+                    img, hand_landmarks, self.mp_hands.HAND_CONNECTIONS,
+                    self.landmark_drawing_spec,
+                    self.connection_drawing_spec
+                )
+
         return img
     
     def _scale_landmarks(self, landmarks, scale_factor):
@@ -185,30 +172,89 @@ class HandDetector:
         info = [x1, y1, x2, y2, cx, cy]
         
         return length, img, info
-    
-    def detect_gesture(self):
-        """
-        Mendeteksi gesture tangan - dioptimalkan dengan cache
-        """
-        if not self.landmarks_list:
-            return "No Hand"
-            
+
+    def detect_mute_gesture(self) -> str:
+        """Detect mute gesture (closed fist)"""
+        if not self.landmarks_list or len(self.landmarks_list) < 21:
+            return "Unknown"
+
         fingers = self.fingers_up()
         if not fingers:
             return "Unknown"
-        
-        # Volume Control Gesture (thumb dan index terangkat, lainnya mengepal)
+
+        # All fingers down (closed fist)
+        if sum(fingers) == 0:
+            return "Mute"
+        return "Unknown"
+
+    def detect_previous_gesture(self) -> str:
+        """Detect previous track gesture (thumb down)"""
+        if not self.landmarks_list or len(self.landmarks_list) < 21:
+            return "Unknown"
+
+        fingers = self.fingers_up()
+        if not fingers:
+            return "Unknown"
+
+        # Only thumb down, others up (or thumb pointing down)
+        thumb_tip = self.landmarks_list[4]
+        thumb_base = self.landmarks_list[2]
+
+        # Check if thumb is pointing down
+        if thumb_tip[2] > thumb_base[2] and sum(fingers[1:]) >= 3:  # Thumb down, others up
+            return "Previous"
+        return "Unknown"
+
+    def detect_brightness_gesture(self) -> str:
+        """Detect brightness control gesture (open palm)"""
+        if not self.landmarks_list or len(self.landmarks_list) < 21:
+            return "Unknown"
+
+        fingers = self.fingers_up()
+        if not fingers:
+            return "Unknown"
+
+        # All fingers up (open palm)
+        if sum(fingers) == 5:
+            return "Brightness"
+        return "Unknown"
+
+    def detect_gesture(self):
+        """
+        Enhanced gesture detection with more gestures
+        """
+        if not self.landmarks_list:
+            return "No Hand"
+
+        fingers = self.fingers_up()
+        if not fingers:
+            return "Unknown"
+
+        # Volume Control Gesture (thumb and index up, others down)
         if fingers[1] == 1 and fingers[0] == 1 and sum(fingers[2:]) == 0:
             return "Volume Control"
-            
-        # OK Gesture - simplified detection
+
+        # OK Gesture
         if fingers[1] == 1 and fingers[0] == 0 and sum(fingers[2:]) == 0:
             distance, _, _ = self.find_distance(4, 8, draw=False)
             if distance < 60:  # Increased threshold untuk stabil
                 return "OK"
-                
-        # Peace Gesture - simplified
+
+        # Peace Gesture
         if fingers[1] == 1 and fingers[2] == 1 and sum(fingers[3:]) == 0 and fingers[0] == 0:
             return "Peace"
-            
+
+        # New gestures
+        mute = self.detect_mute_gesture()
+        if mute != "Unknown":
+            return mute
+
+        prev = self.detect_previous_gesture()
+        if prev != "Unknown":
+            return prev
+
+        bright = self.detect_brightness_gesture()
+        if bright != "Unknown":
+            return bright
+
         return "Unknown"
